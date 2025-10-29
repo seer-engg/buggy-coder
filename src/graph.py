@@ -2,6 +2,7 @@ import re
 
 from langchain.agents import create_agent
 from langchain_core.tools import tool
+from googlesearch import search
 
 
 
@@ -49,6 +50,17 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+def perform_web_search(query: str, num_results: int = 5) -> list:
+    """Perform a web search and return a list of result URLs."""
+    return list(search(query, num_results=num_results))
+
+
+web_search_tool = tool("web_search")(perform_web_search)
+def web_search(query: str, num_results: int = 5) -> list:
+    """Perform a web search and return a list of result URLs."""
+    return list(search(query, num_results=num_results))
+
+
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
 	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
@@ -56,9 +68,14 @@ SYSTEM_PROMPT = (
 )
 
 
-app = create_agent(
-	model="openai:gpt-4o-mini",
-	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
-	system_prompt=SYSTEM_PROMPT,
-)
+def get_agent():
+    return create_agent(
+        model="openai:gpt-4o-mini",
+        tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline, web_search_tool],
+        system_prompt=SYSTEM_PROMPT,
+    )
+
+
+if __name__ == "__main__":
+    app = get_agent()
 
