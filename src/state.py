@@ -5,6 +5,8 @@ from langchain_core.messages import AnyMessage
 
 
 class IOState(TypedDict, total=False):
+	"""Base IO state for the Buggy Coder agent."""
+	thread_id: str
 	messages: Annotated[list[AnyMessage], add_messages]
 
 

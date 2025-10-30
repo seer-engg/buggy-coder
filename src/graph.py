@@ -1,8 +1,11 @@
 import re
+from pathlib import Path
 
 from langchain.agents import create_agent
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_core.tools import tool
 
+from .state import BuggyCoderState
 
 
 @tool("add_import")
@@ -49,6 +52,11 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+_STORAGE_DIR = Path(__file__).resolve().parent / "storage"
+_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+_MEMORY_PATH = _STORAGE_DIR / "buggy_coder_memory.sqlite"
+MEMORY = SqliteSaver.from_conn_string(str(_MEMORY_PATH))
+
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
 	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
@@ -60,5 +68,7 @@ app = create_agent(
 	model="openai:gpt-4o-mini",
 	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
 	system_prompt=SYSTEM_PROMPT,
+	state_schema=BuggyCoderState,
+	checkpointer=MEMORY,
 )
 
