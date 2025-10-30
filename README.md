@@ -11,3 +11,7 @@
 cd agents/buggy-coder
 langgraph dev --port 2025
 ```
+
+## New Features
+
+- **Web Search Tool**: A new tool has been integrated to perform web searches and return results. This can be used to gather information from the web as part of the agent's functionality.
