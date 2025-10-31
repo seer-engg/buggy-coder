@@ -11,3 +11,14 @@
 cd agents/buggy-coder
 langgraph dev --port 2025
 ```
+
+## Persistent memory
+
+The agent now keeps a per-thread conversation history on disk so follow-up
+conversations can resume where you left off, even after closing a thread.
+
+- The storage location defaults to `.memory/buggy_coder`. Set the
+  `BUGGY_CODER_MEMORY_DIR` environment variable to customise where memories
+  are stored.
+- When starting a new conversation, pass the same `thread_id` (or
+  `session_id`) to the graph to retrieve the previous history.

@@ -1,8 +1,12 @@
 import re
+from typing import Any, Dict
 
 from langchain.agents import create_agent
+from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.tools import tool
 
+from .memory import get_history
 
 
 @tool("add_import")
@@ -49,6 +53,49 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+
+def _extract_session_id(config: RunnableConfig | None) -> str:
+	"""Best-effort extraction of a session/thread identifier from the config."""
+	if not config:
+		return "default"
+
+	def _pull_id(mapping: Dict[str, Any] | None) -> str | None:
+		if not mapping:
+			return None
+		for key in (
+			"thread_id",
+			"session_id",
+			"conversation_id",
+			"conversation",
+			"chat_id",
+			"id",
+		):
+			value = mapping.get(key)
+			if value:
+				return str(value)
+		return None
+
+	config_dict: Dict[str, Any] = dict(config)  # type: ignore[arg-type]
+	configurable_id = _pull_id(config_dict.get("configurable"))
+	if configurable_id:
+		return configurable_id
+
+	direct_id = _pull_id(config_dict)
+	if direct_id:
+		return direct_id
+
+	metadata = config_dict.get("metadata")
+	metadata_id = _pull_id(metadata if isinstance(metadata, dict) else None)
+	if metadata_id:
+		return metadata_id
+
+	return "default"
+
+
+def _get_session_history(config: RunnableConfig | None):
+	return get_history(_extract_session_id(config))
+
+
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
 	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
@@ -56,9 +103,17 @@ SYSTEM_PROMPT = (
 )
 
 
-app = create_agent(
+base_agent = create_agent(
 	model="openai:gpt-4o-mini",
 	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
 	system_prompt=SYSTEM_PROMPT,
+)
+
+app = RunnableWithMessageHistory(
+	base_agent,
+	get_session_history=_get_session_history,
+	history_messages_key="messages",
+	input_messages_key="messages",
+	output_messages_key="messages",
 )
 
