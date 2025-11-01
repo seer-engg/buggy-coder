@@ -29,14 +29,34 @@ class TestGraphTools(unittest.TestCase):
         result = add_import.func(snippet=snippet, module="math")
         self.assertEqual(result, expected)
 
-    def test_add_import_skips_existing_imports(self):
+    def test_add_import_skips_existing_module_import(self):
+        snippet = (
+            "import math\n"
+            "\n"
+            "print(math.sqrt(4))\n"
+        )
+        result = add_import.func(snippet=snippet, module="math")
+        expected = "import math\n\nprint(math.sqrt(4))"
+        self.assertEqual(result, expected)
+
+    def test_add_import_skips_import_with_inline_comment(self):
+        snippet = (
+            "import math  # math functions\n"
+            "\n"
+            "print(math.sqrt(4))\n"
+        )
+        result = add_import.func(snippet=snippet, module="math")
+        expected = "import math  # math functions\n\nprint(math.sqrt(4))"
+        self.assertEqual(result, expected)
+
+    def test_add_import_adds_alongside_from_import(self):
         snippet = (
             "from math import sqrt\n"
             "\n"
             "print(sqrt(4))\n"
         )
         result = add_import.func(snippet=snippet, module="math")
-        expected = "from math import sqrt\n\nprint(sqrt(4))"
+        expected = "import math\nfrom math import sqrt\n\nprint(sqrt(4))"
         self.assertEqual(result, expected)
 
     def test_rename_first_occurrence_matches_whole_word_only(self):

@@ -9,8 +9,12 @@ from langchain_core.tools import tool
 def add_import(snippet: str, module: str) -> str:
 	"""Insert an import statement at the top of the snippet if it's missing."""
 	module = module.strip()
+	if not module:
+		return snippet.rstrip("\n")
+
 	import_statement = f"import {module}"
 	lines = snippet.splitlines()
+	line_count = len(lines)
 
 	for line in lines:
 		stripped = line.strip()
@@ -18,15 +22,10 @@ def add_import(snippet: str, module: str) -> str:
 			imports = [part.strip() for part in stripped[len("import "):].split(",")]
 			if any(part.split(" as ")[0] == module for part in imports):
 				return snippet.rstrip("\n")
-		if stripped.startswith("from "):
-			parts = stripped.split()
-			if len(parts) >= 4 and parts[1] == module and parts[0] == "from" and parts[2] == "import":
-				return snippet.rstrip("\n")
 		if stripped == import_statement:
 			return snippet.rstrip("\n")
 
 	insertion_index = 0
-	line_count = len(lines)
 
 	if line_count and lines[0].startswith("#!"):
 		insertion_index = 1
@@ -48,18 +47,41 @@ def add_import(snippet: str, module: str) -> str:
 						break
 					insertion_index += 1
 
-	while insertion_index < line_count and lines[insertion_index].strip() == "":
-		insertion_index += 1
+	body_index = insertion_index
+	while body_index < line_count and lines[body_index].strip() == "":
+		body_index += 1
 
-	while insertion_index < line_count:
-		stripped = lines[insertion_index].strip()
-		if stripped.startswith("import ") or stripped.startswith("from "):
-			insertion_index += 1
-		else:
-			break
+	first_import_index = None
+	first_from_index = None
+	last_plain_import_index = None
+
+	idx = body_index
+	while idx < line_count:
+		stripped = lines[idx].strip()
+		if stripped.startswith("import "):
+			if first_import_index is None:
+				first_import_index = idx
+			last_plain_import_index = idx
+			idx += 1
+			continue
+		if stripped.startswith("from "):
+			if first_import_index is None:
+				first_import_index = idx
+			if first_from_index is None:
+				first_from_index = idx
+			idx += 1
+			continue
+		break
+
+	if last_plain_import_index is not None:
+		insertion_point = last_plain_import_index + 1
+	elif first_from_index is not None:
+		insertion_point = first_from_index
+	else:
+		insertion_point = body_index
 
 	updated_lines = lines[:]
-	updated_lines.insert(insertion_index, import_statement)
+	updated_lines.insert(insertion_point, import_statement)
 	return "\n".join(updated_lines).rstrip("\n")
 
 
