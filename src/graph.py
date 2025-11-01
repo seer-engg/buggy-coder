@@ -1,7 +1,9 @@
 import ast
 import io
+import operator
 import re
 import tokenize
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from langchain.agents import create_agent
@@ -269,6 +271,102 @@ def _apply_replacements(snippet: str, replacements: List[Tuple[int, int, str]]) 
 	return modified
 
 
+@dataclass(frozen=True)
+class RuntimeIssue:
+	issue_type: str
+	message: str
+	lineno: int
+	col_offset: int
+
+	def format_log(self) -> str:
+		location = f"line {self.lineno}, column {self.col_offset}"
+		return f"[runtime_error] {self.issue_type} at {location} - {self.message}"
+
+
+def _is_zero(value: object) -> bool:
+	if isinstance(value, bool):
+		return not value
+	if isinstance(value, (int, float)):
+		return value == 0
+	return False
+
+
+_ALLOWED_BINOPS = {
+	ast.Add: operator.add,
+	ast.Sub: operator.sub,
+	ast.Mult: operator.mul,
+	ast.Div: operator.truediv,
+	ast.FloorDiv: operator.floordiv,
+	ast.Mod: operator.mod,
+	ast.Pow: operator.pow,
+}
+
+
+def _resolve_static_value(node: ast.AST) -> Tuple[Optional[object], bool]:
+	if isinstance(node, ast.Constant):
+		return node.value, True
+	if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+		operand_value, ok = _resolve_static_value(node.operand)
+		if not ok:
+			return None, False
+		try:
+			result = +operand_value if isinstance(node.op, ast.UAdd) else -operand_value
+		except TypeError:
+			return None, False
+		return result, True
+	if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINOPS:
+		left_value, left_ok = _resolve_static_value(node.left)
+		right_value, right_ok = _resolve_static_value(node.right)
+		if left_ok and right_ok:
+			operation = _ALLOWED_BINOPS[type(node.op)]
+			try:
+				return operation(left_value, right_value), True
+			except ZeroDivisionError:
+				return None, False
+			except Exception:
+				return None, False
+	return None, False
+
+
+def detect_runtime_issues(snippet: str) -> List[RuntimeIssue]:
+	try:
+		tree = ast.parse(snippet)
+	except SyntaxError:
+		return []
+
+	issues: List[RuntimeIssue] = []
+	for node in ast.walk(tree):
+		if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Div, ast.FloorDiv, ast.Mod)):
+			denominator_value, can_resolve = _resolve_static_value(node.right)
+			if can_resolve and _is_zero(denominator_value):
+				op_name: str
+				if isinstance(node.op, ast.Div):
+					op_name = "division"
+				elif isinstance(node.op, ast.FloorDiv):
+					op_name = "floor division"
+				else:
+					op_name = "modulo"
+
+				issues.append(
+					RuntimeIssue(
+						issue_type="ZeroDivisionError",
+						message=f"Detected {op_name} by zero.",
+						lineno=getattr(node, "lineno", 0),
+						col_offset=getattr(node, "col_offset", 0),
+					)
+				)
+	return sorted(issues, key=lambda issue: (issue.lineno, issue.col_offset))
+
+
+@tool("log_runtime_issues")
+def log_runtime_issues(snippet: str) -> str:
+	"""Analyze a code snippet for runtime issues and produce standardized log messages."""
+	issues = detect_runtime_issues(snippet)
+	if not issues:
+		return "[runtime_error] none detected"
+	return "\n".join(issue.format_log() for issue in issues)
+
+
 @tool("stub_function")
 def stub_function(snippet: str, return_value: Optional[str] = None) -> str:
 	"""Turn `pass`-only function bodies into working stubs that preserve the signature."""
@@ -321,7 +419,7 @@ SYSTEM_PROMPT = (
 
 app = create_agent(
 	model="openai:gpt-4o-mini",
-	tools=[add_import, rename_symbol, fix_indexing, stub_function],
+	tools=[add_import, rename_symbol, fix_indexing, stub_function, log_runtime_issues],
 	system_prompt=SYSTEM_PROMPT,
 )
 

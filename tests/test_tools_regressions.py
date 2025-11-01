@@ -1,10 +1,18 @@
 import pytest
 
-from src.graph import add_import, fix_indexing, rename_symbol, stub_function
+from src.graph import (
+    add_import,
+    detect_runtime_issues,
+    fix_indexing,
+    log_runtime_issues,
+    rename_symbol,
+    stub_function,
+)
 
 add_import = add_import.func
 rename_symbol = rename_symbol.func
 fix_indexing = fix_indexing.func
+log_runtime_issues = log_runtime_issues.func
 stub_function = stub_function.func
 
 
@@ -102,3 +110,66 @@ def test_stub_function_handles_async_definitions():
 
     expected = "async def fetch():\n    raise NotImplementedError()\n"
     assert result == expected
+
+
+def test_detect_runtime_issues_identifies_division_by_zero():
+    snippet = "result = 10 / 0\n"
+    issues = detect_runtime_issues(snippet)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.issue_type == "ZeroDivisionError"
+    assert "division by zero" in issue.message
+    assert issue.lineno == 1
+
+
+def test_detect_runtime_issues_handles_nested_zero_expression():
+    snippet = "value = 5 / (3 - 3)\n"
+    issues = detect_runtime_issues(snippet)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.issue_type == "ZeroDivisionError"
+    assert issue.lineno == 1
+
+
+def test_log_runtime_issues_formats_output_for_floor_division():
+    snippet = "value = 10 // (2 - 2)\n"
+    log_output = log_runtime_issues(snippet)
+
+    assert "[runtime_error] ZeroDivisionError" in log_output
+    assert "floor division by zero" in log_output
+    assert "line 1" in log_output
+
+
+def test_log_runtime_issues_reports_none_when_no_issue():
+    snippet = "value = 10 / 2\n"
+    assert log_runtime_issues(snippet) == "[runtime_error] none detected"
+
+
+def test_detect_runtime_issues_treats_false_as_zero():
+    snippet = "value = 42 / False\n"
+    issues = detect_runtime_issues(snippet)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.issue_type == "ZeroDivisionError"
+    assert issue.message == "Detected division by zero."
+    assert issue.lineno == 1
+    assert issue.col_offset == 8
+
+
+def test_log_runtime_issues_reports_multiple_sorted_messages():
+    snippet = (
+        "value = 8 / (4 - 4)\n"
+        "mod = 3 % 0\n"
+        "floored = 10 // (5 - 5)\n"
+    )
+    output = log_runtime_issues(snippet)
+
+    expected_lines = [
+        "[runtime_error] ZeroDivisionError at line 1, column 8 - Detected division by zero.",
+        "[runtime_error] ZeroDivisionError at line 2, column 6 - Detected modulo by zero.",
+        "[runtime_error] ZeroDivisionError at line 3, column 10 - Detected floor division by zero.",
+    ]
+    assert output.splitlines() == expected_lines

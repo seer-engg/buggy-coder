@@ -1,4 +1,4 @@
-from typing import Annotated, TypedDict
+from typing import Annotated, List, TypedDict
 
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
@@ -11,5 +11,6 @@ class IOState(TypedDict, total=False):
 class BuggyCoderState(IOState):
 	snippet: str
 	instructions: str
+	logs: List[str]
 
 
