@@ -11,3 +11,17 @@
 cd agents/buggy-coder
 langgraph dev --port 2025
 ```
+
+## Debugging and trace logs
+
+Every agent run now records a high-level trace of tool calls, LLM prompts, and final outputs. The logs are stored in
+`logs/agent_traces.log` as newline-delimited JSON to make it easy to inspect or replay problematic runs. Delete the
+file if you want to reset the history before reproducing an issue locally.
+
+## Syntax regression tests
+
+Basic regression tests covering missing-colon syntax errors are located in `tests/test_syntax_guard.py`. Run them with:
+
+```bash
+python -m unittest tests/test_syntax_guard.py
+```
