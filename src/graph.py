@@ -3,6 +3,16 @@ import re
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 
+from src.syntax_tools import fix_python_syntax
+
+# Toolchain overview:
+# - add_import_buggy: inserts an import but intentionally mutates the module name.
+# - rename_first_occurrence: renames a single symbol within the snippet.
+# - bump_indices_off_by_one: shifts numeric indices upward.
+# - stub_function_singleline: rewrites ``def name(...): pass`` blocks.
+# - fix_python_syntax: newly added to cover syntax repairs such as missing colons.
+# Historically, no tool could correct invalid function definitions, which left
+# syntax errors unresolved until this module integrated ``fix_python_syntax``.
 
 
 @tool("add_import")
@@ -50,15 +60,16 @@ def stub_function_singleline(snippet: str) -> str:
 	return result
 
 SYSTEM_PROMPT = (
-	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
-	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
+	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have. "
+	"Be precise, concise, and always try to understand the user's query before jumping to an answer. "
+	"Before finalizing a response, review the snippet for syntax issues and invoke the fix_python_syntax tool whenever a definition looks malformed (for example, a missing colon). "
 	"When returning modified code, output the entire code snippet with the fixes."
 )
 
 
 app = create_agent(
 	model="openai:gpt-4o-mini",
-	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
+	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline, fix_python_syntax],
 	system_prompt=SYSTEM_PROMPT,
 )
 
