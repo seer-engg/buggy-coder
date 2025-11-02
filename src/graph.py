@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from langchain.agents import create_agent
 from langchain_core.callbacks import BaseCallbackHandler
@@ -133,6 +133,87 @@ def stub_function_singleline(snippet: str) -> str:
     return _strip_trailing_newline(result)
 
 
+def _fix_missing_function_colons(snippet: str) -> Optional[str]:
+    """Ensure function definitions within the snippet include a trailing colon."""
+    if not isinstance(snippet, str) or not snippet:
+        return None
+    lines = snippet.splitlines()
+    modified = False
+
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not (stripped.startswith("def ") or stripped.startswith("async def ")):
+            continue
+
+        if "#" in line:
+            code_part, comment = line.split("#", 1)
+            comment = "#" + comment
+        else:
+            code_part, comment = line, ""
+
+        stripped_code = code_part.rstrip()
+        if stripped_code.endswith(":"):
+            continue
+
+        if ")" not in code_part:
+            continue
+
+        prefix = stripped_code
+        if not prefix:
+            continue
+        spacer = code_part[len(prefix) :]
+        new_line = f"{prefix}:{spacer}{comment}"
+        if comment and not spacer:
+            # Guarantee a space before inline comments when none existed originally.
+            new_line = f"{prefix}: {comment}"
+        lines[index] = new_line
+        modified = True
+
+    if not modified:
+        return None
+
+    fixed = "\n".join(lines)
+    if snippet.endswith("\n"):
+        fixed += "\n"
+    return fixed
+
+
+def _extract_snippet_target(response: Any) -> Optional[Tuple[Optional[str], str]]:
+    if isinstance(response, str):
+        return None, response
+    if isinstance(response, dict):
+        for key in ("output", "content"):
+            value = response.get(key)
+            if isinstance(value, str):
+                return key, value
+    return None
+
+
+def _apply_colon_fix_to_response(response: Any) -> Any:
+    target = _extract_snippet_target(response)
+    if target is None:
+        return response
+    key, snippet = target
+    fixed = _fix_missing_function_colons(snippet)
+    if fixed is None:
+        return response
+    fixed = _strip_trailing_newline(fixed)
+    if key is None:
+        return fixed
+    updated = dict(response)
+    updated[key] = fixed
+    return updated
+
+
+@tool("ensure_function_colons")
+def ensure_function_colons(snippet: str) -> str:
+    """Add a trailing colon to function definitions that are missing one."""
+    fixed = _fix_missing_function_colons(snippet)
+    if fixed is None:
+        return _strip_trailing_newline(snippet)
+    return _strip_trailing_newline(fixed)
+
+
 class SyntaxValidationError(ValueError):
     """Raised when generated code fails Python syntax validation."""
 
@@ -168,6 +249,7 @@ SYSTEM_PROMPT = (
     "You are Coder, an assistant tasked with diagnosing issues in user-provided code and fixing them with the available tools.\n"
     "Follow the user\u2019s instructions carefully and make the smallest change that fully resolves the problem.\n"
     "Before responding, double-check the syntax of the entire snippet\u2014for example, ensure every function definition ends with a colon and the indentation is valid.\n"
+    "Use the ensure_function_colons or apply_precise_patch tools when you notice a missing colon so the snippet stays syntactically correct.\n"
     "When you return code, output the complete corrected snippet."
 )
 
@@ -180,6 +262,7 @@ _base_agent = create_agent(
         bump_indices_off_by_one,
         stub_function_singleline,
         apply_precise_patch,
+        ensure_function_colons,
     ],
     system_prompt=SYSTEM_PROMPT,
 )
@@ -191,6 +274,7 @@ def _run_agent_with_validation(inputs: Dict[str, Any], config: Optional[Dict[str
     callbacks.append(TraceLoggingCallback())
     config["callbacks"] = callbacks
     response = _base_agent.invoke(inputs, config=config)
+    response = _apply_colon_fix_to_response(response)
     return _syntax_guard(response)
 
 
