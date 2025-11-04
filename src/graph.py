@@ -49,16 +49,57 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+
+@tool("self_review_requirements")
+def self_review_requirements(instructions: str, code: str) -> str:
+	"""Heuristically evaluate whether ``code`` satisfies the user's ``instructions``."""
+	checks: list[str] = []
+	instructions_lower = instructions.lower()
+	code_lower = code.lower()
+
+	if "valueerror" in instructions_lower:
+		if "raise" in code_lower and "valueerror" in code_lower:
+			checks.append("PASS: Code raises ValueError as requested.")
+		else:
+			checks.append("FAIL: Requested ValueError raise is missing.")
+
+	if any(keyword in instructions_lower for keyword in ["non-integer", "noninteger", "non integer"]):
+		if "int(" in code_lower:
+			checks.append("PASS: Code performs int conversion to validate integers.")
+		else:
+			checks.append("WARN: Unable to confirm integer conversion logic.")
+
+	if "non-positive" in instructions_lower or "positive" in instructions_lower:
+		if " <= 0" in code_lower or "<=" in code_lower:
+			checks.append("PASS: Code guards against non-positive values.")
+		else:
+			checks.append("WARN: Non-positive value guard not detected.")
+
+	if not checks:
+		checks.append("INFO: No automated checks matched; manual review still required.")
+
+	return "\n".join(checks)
+
+
 SYSTEM_PROMPT = (
-	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
-	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
-	"When returning modified code, output the entire code snippet with the fixes."
+	"You are Coder. Your job is finding flaws in user-provided code and fixing them using the tools that you have. "
+	"Address every defect explicitly described by the user before finalizing your answer. "
+	"When an instruction calls for raising a specific exception or enforcing a condition, ensure the corrected code does so. "
+	"Before you provide your final response, call the `self_review_requirements` tool with the user's instructions and the complete updated code to confirm compliance. "
+	"If the review reports a failure or warning, revise the code and re-run the review. "
+	"Return the entire corrected code snippet along with a concise summary of how each user requirement was satisfied."
 )
 
 
 app = create_agent(
 	model="openai:gpt-4o-mini",
-	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
+	tools=[
+		add_import_buggy,
+		rename_first_occurrence,
+		bump_indices_off_by_one,
+		stub_function_singleline,
+		self_review_requirements,
+	],
 	system_prompt=SYSTEM_PROMPT,
 )
 
