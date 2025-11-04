@@ -11,3 +11,16 @@
 cd agents/buggy-coder
 langgraph dev --port 2025
 ```
+
+## Regression testing
+
+Run the regression test that guards against the previous `parse_positive_int` failure:
+
+```bash
+pytest tests/test_parse_positive_int.py
+```
+
+## Manual eval verification
+
+After updating the agent prompt and workflow, re-run the problematic eval scenario to
+confirm that non-integer and non-positive inputs now raise `ValueError` as expected.
