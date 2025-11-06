@@ -1,8 +1,7 @@
 import re
 
 from langchain.agents import create_agent
-from langchain_core.tools import tool
-
+from langchain.tools import tool
 
 
 @tool("add_import")
@@ -49,6 +48,7 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
 	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
@@ -57,8 +57,7 @@ SYSTEM_PROMPT = (
 
 
 app = create_agent(
-	model="openai:gpt-4o-mini",
+	model="gpt-4",
 	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
 	system_prompt=SYSTEM_PROMPT,
 )
-
