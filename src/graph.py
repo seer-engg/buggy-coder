@@ -39,15 +39,18 @@ def bump_indices_off_by_one(snippet: str) -> str:
 
 @tool("stub_function")
 def stub_function_singleline(snippet: str) -> str:
-	"""Replace 'def name(...): pass' with a simple function stub."""
-	result = re.sub(
-		r"def\s+(\w+)\(.*\):\s*pass",
-		r"def \1():\n    return None",
-		snippet,
-	)
-	if result.endswith("\n"):
-		result = result[:-1]
-	return result
+    """Replace 'def name(...): pass' with a simple function stub."""
+    # Use regex to match function definitions with various signatures
+    pattern = r"def\s+(\w+)\s*\(.*\):\s*pass" 
+    replacement = r"def \1():\n    return None"
+    result = re.sub(pattern, replacement, snippet, flags=re.MULTILINE)
+    # Handle multi-line function definitions if needed
+    if not re.search(r"def\s+\w+\s*\(.*\):", result):
+        # fallback or more complex handling can be added here
+        pass
+    if result.endswith("\n"):
+        result = result[:-1]
+    return result
 
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
