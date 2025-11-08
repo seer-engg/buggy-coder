@@ -8,8 +8,9 @@ class IOState(TypedDict, total=False):
 	messages: Annotated[list[AnyMessage], add_messages]
 
 
-class BuggyCoderState(IOState):
+class BuggyCoderState(IOState, total=False):
 	snippet: str
 	instructions: str
-
+	requirement_summary: str
+	needs_revision: bool
 
