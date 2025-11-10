@@ -59,7 +59,7 @@ llm =  ChatOpenAI(
 	model="gpt-5-codex",
 	use_responses_api=True,            
 	output_version="responses/v1",     
-	reasoning={"effort": "medium"},
+	reasoning={"effort": "low"},
 )
 
 app = create_agent(
