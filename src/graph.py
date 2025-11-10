@@ -2,7 +2,7 @@ import re
 
 from langchain.agents import create_agent
 from langchain_core.tools import tool
-
+from langchain_openai import ChatOpenAI
 
 
 @tool("add_import")
@@ -55,9 +55,15 @@ SYSTEM_PROMPT = (
 	"When returning modified code, output the entire code snippet with the fixes."
 )
 
+llm =  ChatOpenAI(
+	model="gpt-5-codex",
+	use_responses_api=True,            
+	output_version="responses/v1",     
+	reasoning={"effort": "medium"},
+)
 
 app = create_agent(
-	model="openai:gpt-4o-mini",
+	model=llm,
 	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
 	system_prompt=SYSTEM_PROMPT,
 )
