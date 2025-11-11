@@ -26,3 +26,14 @@ langgraph dev --port 2025
    ```bash
    uv sync --port 2025
    ```
+
+## Safety tooling for optional child collections
+
+- The agent now registers a `normalize_iterable_field` tool that rewrites loops consuming `node['children']` or `node.get('children')` into a guarded form. The tool emits:
+  ```python
+  children = node.get('children') or []
+  for child in children:
+      ...
+  ```
+  ensuring that missing keys or `None` values are treated as empty lists before iteration begins.
+- When crafting fixes for tree or dictionary structures, normalize optional child collections with this pattern so the agent consistently avoids crashes on absent children.
