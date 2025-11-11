@@ -49,10 +49,46 @@ def stub_function_singleline(snippet: str) -> str:
 		result = result[:-1]
 	return result
 
+
+@tool("normalize_iterable_field")
+def normalize_iterable_field(snippet: str) -> str:
+	"""Normalize loops over optional child collections before iteration."""
+	line_patterns = [
+		re.compile(r"^(\s*)for\s+(\w+)\s+in\s+([\w\.]+)\[['\"]children['\"]\]:(\s*)$"),
+		re.compile(r"^(\s*)for\s+(\w+)\s+in\s+([\w\.]+)\.get\(['\"]children['\"],\s*\[\]\):(\s*)$"),
+		re.compile(r"^(\s*)for\s+(\w+)\s+in\s+([\w\.]+)\.get\(['\"]children['\"]\):(\s*)$"),
+	]
+	lines = snippet.splitlines()
+	result_lines = []
+	changed = False
+
+	for line in lines:
+		replaced = False
+		for pattern in line_patterns:
+			match = pattern.match(line)
+			if match:
+				indent, iter_var, node_expr, trailing = match.groups()
+				assignment = f"{indent}children = {node_expr}.get('children') or []{trailing}"
+				loop_line = f"{indent}for {iter_var} in children:{trailing}"
+				result_lines.append(assignment)
+				result_lines.append(loop_line)
+				changed = True
+				replaced = True
+				break
+		if not replaced:
+			result_lines.append(line)
+
+	result = "\n".join(result_lines) if changed else snippet
+	if result.endswith("\n"):
+		result = result[:-1]
+	return result
+
+
 SYSTEM_PROMPT = (
 	"You are Coder. Your job is finding flaws in a user-glam code and fixing them using the tools that you have."
 	"Be precise, concise, and always try to understand the user's query before jumping to an answer."
 	"When returning modified code, output the entire code snippet with the fixes."
+	"When iterating over child collections drawn from dict or tree structures, guard against missing keys and None values by normalizing them to empty lists before looping."
 )
 
 llm =  ChatOpenAI(
@@ -64,7 +100,7 @@ llm =  ChatOpenAI(
 
 app = create_agent(
 	model=llm,
-	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline],
+	tools=[add_import_buggy, rename_first_occurrence, bump_indices_off_by_one, stub_function_singleline, normalize_iterable_field],
 	system_prompt=SYSTEM_PROMPT,
 )
 
